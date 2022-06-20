@@ -1,0 +1,33 @@
+# https://kubernetes.io/docs/tasks/configure-pod-container/configure-persistent-volume-storage/
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: kubelite-data-pv
+  namespace: kubelite
+  labels:
+    app: kubelite
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: "/mnt/data"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: kubelite-data-pvc
+  namespace: kubelite
+spec:
+  storageClassName: standard
+  accessModes:
+  - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  selector:
+    matchLabels:
+      app: kubelite

@@ -1,0 +1,97 @@
+pipeline {
+    agent any
+    // https://www.jenkins.io/doc/pipeline/tour/environment/
+    environment {
+        PROJECT_NAME = 'kubelite'
+        DOCKER_REPO = 'jrmanes'
+        // https://stackoverflow.com/questions/16943665/how-to-get-git-short-hash-in-to-a-variable-in-jenkins-running-on-windows-2008
+        GIT_SHORT_HASH = GIT_COMMIT.take(7)
+        KUBERNETES_CONTEXT_NAME = 'kubelite-k8s'
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Checking out..'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+            }
+        }
+        stage('Getting The Docker Tag') {
+            steps {
+                script { 
+                    // Generate the parameter selector from all the images available in the registry
+                    // Define the Token var and generate a login token
+                    // Specify the: set +x -> in order to hide all the output in of this command
+                    def TOKEN="" 
+                    withCredentials([usernamePassword(credentialsId: 'docker_hub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                        TOKEN= sh script: """
+                            set +x
+                            curl -s -H "Content-Type: application/json" -X POST -d '{"username":"'${USERNAME}'", "password": "'${PASSWORD}'"}' https://hub.docker.com/v2/users/login/ | jq -r .token
+                            set -x
+                        """, returnStdout: true
+                    }
+                    // Generate the choices array listing all the available tags in the registry
+                    def choices= sh script: """
+                        set +x
+                        curl -s -H "Authorization: JWT ${TOKEN}" "https://hub.docker.com/v2/repositories/jrmanes/kubelite/tags/"| jq -r '.results|.[]|.name'
+                        set -x
+                    """, returnStdout: true 
+                    properties([
+                        parameters([
+                            choice(
+                                choices: choices,
+                                name: 'COMMIT_TO_DEPLOY'
+                            )
+                        ])
+                    ])
+                    return choices
+                }
+            }
+        }
+        stage('Deployment - Kubernetes Context') {
+            steps {
+                script {
+                    // The command contains -> || true
+                    // This is because is an hypothetical context (doesn't exists), and it will fail.
+                    // For the production environment, remove this part.
+                    sh """
+                        echo "Switch to the Kuberentes context [${KUBERNETES_CONTEXT_NAME}]"
+                        kubectl config use-context ${KUBERNETES_CONTEXT_NAME} || true
+                    """
+                }
+            }
+        }
+        stage('Deployment - Kubernetes Modify Commit') {
+            steps {
+                script {
+                    sh """
+                        echo "Change the commit: [${KUBERNETES_CONTEXT_NAME}]"
+                        yq -i '.spec.template.spec.containers[0].image = "${DOCKER_REPO}/${PROJECT_NAME}:${params.COMMIT_TO_DEPLOY}"' ./k8s-ftw/kubelite_sts.yml
+                        cat ./k8s-ftw/kubelite_sts.yml
+                    """
+                }
+            }
+        }
+        stage('Deployment - Kubernetes Dry Run Manifest') {
+            steps {
+                script {
+                    sh """
+                        echo "Apply the Kubernetes manifest with the commit: [${KUBERNETES_CONTEXT_NAME}]"
+                        kubectl apply -f ./k8s-ftw/kubelite_sts.yml --dry-run=client
+                    """
+                }
+            }
+        }
+        stage('Deployment - Kubernetes Apply Manifest') {
+            steps {
+                script {
+                    sh """
+                        echo "Apply the Kubernetes manifest with the commit: [${KUBERNETES_CONTEXT_NAME}]"
+                        kubectl apply -f ./k8s-ftw/kubelite_sts.yml
+                    """
+                }
+            }
+        }
+    }
+}

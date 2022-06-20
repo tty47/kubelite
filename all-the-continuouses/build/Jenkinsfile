@@ -1,0 +1,83 @@
+pipeline {
+    agent any
+    // https://www.jenkins.io/doc/pipeline/tour/environment/
+    environment {
+        PROJECT_NAME = 'kubelite'
+        DOCKER_REPO = 'jrmanes'
+        // https://stackoverflow.com/questions/16943665/how-to-get-git-short-hash-in-to-a-variable-in-jenkins-running-on-windows-2008
+        GIT_SHORT_HASH = GIT_COMMIT.take(7)
+    }
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Checking out..'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+            }
+        }
+        stage('Build & Tag Docker Image') {
+            steps {
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Building...'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                sh """
+                    cd ./docker-ayes
+                    docker build -t ${DOCKER_REPO}/${PROJECT_NAME}:${GIT_SHORT_HASH} -t ${DOCKER_REPO}/${PROJECT_NAME}:latest .
+                """
+            }
+        }
+        stage('Push Image') {
+            steps {
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Pushing the image to the registry...'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                // https://plugins.jenkins.io/credentials-binding/
+               withCredentials([usernamePassword(credentialsId: 'docker_hub', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+                sh """
+                    docker login -u '$USERNAME' -p '$PASSWORD'
+                    docker push ${DOCKER_REPO}/${PROJECT_NAME}:${GIT_SHORT_HASH}
+                    docker push ${DOCKER_REPO}/${PROJECT_NAME}:latest
+                """
+                }
+            }
+        }
+        // https://docs.docker.com/engine/scan/
+        stage('Secutiry Verify Snyk') {
+            steps {
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Verify that the plugin Snyk is already installed...'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                sh """
+                    docker scan --accept-license --version
+                """
+            }
+        }
+        stage('Secutiry Scan') {
+            steps {
+                // The following command executes the scan against the docker image.
+                // For testing purposes, I have added the second command: || true
+                // This allow us to check the scan result without stopping the pipeline.
+                // Recommendation: use the following command for the production environment:
+                // docker scan ${DOCKER_REPO}/${PROJECT_NAME}:${GIT_SHORT_HASH} --accept-license
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                echo 'Scan docker image with Snyk...'
+                echo '- - - - - - - - - - - - - - - - - - - -'
+                sh """
+                    docker scan ${DOCKER_REPO}/${PROJECT_NAME}:${GIT_SHORT_HASH} --accept-license || true
+                """
+            }
+        }
+    }
+    post {
+       success {
+           echo '- - - - - - - - - - - - - - - - - - - -'
+           echo 'Cleaning up docker images...'
+           echo '- - - - - - - - - - - - - - - - - - - -'
+           sh """
+               docker rmi ${DOCKER_REPO}/${PROJECT_NAME}:${GIT_SHORT_HASH}
+               docker rmi ${DOCKER_REPO}/${PROJECT_NAME}:latest
+           """
+       }
+    }
+}
