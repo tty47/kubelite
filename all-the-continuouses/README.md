@@ -17,7 +17,7 @@ This folder contains two `Jenkinsfile`:
 
 | Name | Description | Kind |
 | --- | --- | --- |
-| jenkins_github | Use it for authenticate to GitHub | TOKEN |
-| docker_hub | Use it for authenticate to Docker hub | USER & TOKEN |
+| **jenkins_github** | Use it for authenticate to GitHub | TOKEN |
+| **docker_hub** | Use it for authenticate to Docker hub | USER & TOKEN |
 
 ---
