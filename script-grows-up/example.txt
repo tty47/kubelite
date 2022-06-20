@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kubelite
+  namespace: kubelite
+spec:
+  serviceName: "kubelite"
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubelite
+  template:
+    metadata:
+      labels:
+        app: kubelite
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      volumes:
+        - name: lite-data
+          persistentVolumeClaim:
+             claimName: kubelite-data-pvc
+      terminationGracePeriodSeconds: 10
+      containers:
+      - name: kubelite
+        image: jrmanes/kubelite:latest
+        imagePullPolicy: IfNotPresent
+        resources:
+          requests:
+            cpu: 100m
+            memory: 100Mi
+          limits:
+            cpu: 150m
+            memory: 150Mi
+
+        ports:
+        - containerPort: 9333
+          name: port
+        volumeMounts:
+        - name: lite-data
+          mountPath: /home/litecoin/.litecoin
+        securityContext:
+          allowPrivilegeEscalation: false
+      imagePullSecrets:
+        - name: docker-reg
