@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"flag"
-	"fmt"
 	"log"
 	"io/ioutil"
 	"os"
@@ -20,11 +19,6 @@ func main() {
 
 	// Parse the flags
 	flag.Parse()
-
-	fmt.Println("Hello!")
-	fmt.Println("old:", *str_old)
-	fmt.Println("new:", *str_new)
-	fmt.Println("file:", *file)
 
 	// Load the file in the path received from by the input
 	// Source: https://pkg.go.dev/io/ioutil@go1.18.3#ReadFile
