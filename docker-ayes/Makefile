@@ -1,4 +1,4 @@
-.PHONY: build
+.PHONY: build push
 PROJECT_NAME:=kubelite
 DOCKER_REPO:=jrmanes
 
